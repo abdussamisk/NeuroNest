@@ -117,11 +117,11 @@ fun CaregiverDashboardScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MetricSmallBox("Avg Accuracy", "${uiState.averageAccuracy.toInt()}%", PrimaryTeal)
-                        MetricSmallBox("Reaction Time", "${(uiState.averageReactionTimeMs / 1000.0).toString().take(3)}s", SecondaryWarmGold)
-                        MetricSmallBox("AI Difficulty", "Level ${uiState.profile.currentDifficultyLevel}", GamePurpleAccent)
+                        MetricSmallBox("Avg Accuracy", "${uiState.averageAccuracy.toInt()}%", PrimaryTeal, Modifier.weight(1f))
+                        MetricSmallBox("Reaction Time", "${(uiState.averageReactionTimeMs / 1000.0).toString().take(3)}s", SecondaryWarmGold, Modifier.weight(1f))
+                        MetricSmallBox("AI Difficulty", "Level ${uiState.profile.currentDifficultyLevel}", GamePurpleAccent, Modifier.weight(1f))
                     }
                 }
             }
@@ -232,19 +232,19 @@ fun CaregiverDashboardScreen(
 }
 
 @Composable
-fun MetricSmallBox(label: String, value: String, accentColor: Color) {
+fun MetricSmallBox(label: String, value: String, accentColor: Color, modifier: Modifier = Modifier) {
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.width(100.dp)
+        modifier = modifier
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = label, fontSize = 11.sp, color = PatientTextSecondary)
+            Text(text = label, fontSize = 11.sp, color = PatientTextSecondary, maxLines = 1)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = accentColor)
+            Text(text = value, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = accentColor, maxLines = 1)
         }
     }
 }
