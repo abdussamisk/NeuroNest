@@ -6,6 +6,7 @@ import org.sih.neuronest.data.local.dao.CognitiveDao
 import org.sih.neuronest.data.local.entity.CaregiverAlert
 import org.sih.neuronest.data.local.entity.CognitiveSession
 import org.sih.neuronest.data.local.entity.PatientProfile
+import org.sih.neuronest.data.remote.supabase.SupabaseRemoteDataSource
 import org.sih.neuronest.domain.ai.CognitiveDifficultyEngine
 import org.sih.neuronest.domain.ai.TFLiteAnomalyDetector
 import javax.inject.Inject
@@ -16,7 +17,8 @@ class CognitiveRepository @Inject constructor(
     private val cognitiveDao: CognitiveDao,
     private val alertDao: AlertDao,
     private val difficultyEngine: CognitiveDifficultyEngine,
-    private val tfliteAnomalyDetector: TFLiteAnomalyDetector
+    private val tfliteAnomalyDetector: TFLiteAnomalyDetector,
+    private val supabaseRemoteDataSource: SupabaseRemoteDataSource
 ) {
 
     val patientProfileFlow: Flow<PatientProfile?> = cognitiveDao.getPatientProfileFlow()
@@ -28,6 +30,7 @@ class CognitiveRepository @Inject constructor(
         if (profile == null) {
             profile = PatientProfile()
             cognitiveDao.insertOrUpdateProfile(profile)
+            supabaseRemoteDataSource.syncPatientProfile(profile)
         }
         return profile
     }
@@ -49,7 +52,7 @@ class CognitiveRepository @Inject constructor(
             baselineScore = currentProfile.baselineScore
         )
 
-        // Save session locally in Room DB
+        // Save session locally in Room DB first (Offline-First)
         val session = CognitiveSession(
             gameType = gameType,
             difficultyLevel = currentProfile.currentDifficultyLevel,
@@ -63,6 +66,12 @@ class CognitiveRepository @Inject constructor(
         )
         cognitiveDao.insertSession(session)
 
+        // Attempt direct real-time sync to Supabase Cloud
+        val sessionSynced = supabaseRemoteDataSource.syncCognitiveSessions(listOf(session))
+        if (sessionSynced) {
+            cognitiveDao.markSessionSynced(session.id)
+        }
+
         // Check if baseline anomaly alert needs to be generated for caregiver
         if (evalResult.isBaselineAnomalyDetected) {
             val alert = CaregiverAlert(
@@ -72,6 +81,7 @@ class CognitiveRepository @Inject constructor(
                 description = "Patient showed a drop in accuracy (${accuracy.toInt()}%) during $gameType. Difficulty adjusted to Level ${evalResult.recommendedLevel}."
             )
             alertDao.insertAlert(alert)
+            supabaseRemoteDataSource.syncCaregiverAlerts(listOf(alert))
         }
 
         // Update patient profile with new health index & level
@@ -81,11 +91,14 @@ class CognitiveRepository @Inject constructor(
             currentDifficultyLevel = evalResult.recommendedLevel
         )
         cognitiveDao.insertOrUpdateProfile(updatedProfile)
+        supabaseRemoteDataSource.syncPatientProfile(updatedProfile)
     }
 
     suspend fun updateRegion(regionName: String) {
         val profile = getOrCreatePatientProfile()
-        cognitiveDao.insertOrUpdateProfile(profile.copy(selectedRegion = regionName))
+        val updatedProfile = profile.copy(selectedRegion = regionName)
+        cognitiveDao.insertOrUpdateProfile(updatedProfile)
+        supabaseRemoteDataSource.syncPatientProfile(updatedProfile)
     }
 
     suspend fun dismissAlert(alertId: String) {
